@@ -359,7 +359,7 @@ void load_obj(const std::string &filename, MatrixXu &F, MatrixXf &V,
     };
 
     /// Hash function for obj_vertex
-    struct obj_vertexHash : std::unary_function<obj_vertex, size_t> {
+    struct obj_vertexHash {
         std::size_t operator()(const obj_vertex &v) const {
             size_t hash = std::hash<uint32_t>()(v.p);
             hash = hash * 37 + std::hash<uint32_t>()(v.uv);
@@ -569,12 +569,10 @@ void write_obj(const std::string &filename, const MatrixXu &F,
 
     /* Check for irregular faces */
     std::map<uint32_t, std::pair<uint32_t, std::map<uint32_t, uint32_t>>> irregular;
-    size_t nIrregular = 0;
 
     for (uint32_t f=0; f<F.cols(); ++f) {
         if (F.rows() == 4) {
             if (F(2, f) == F(3, f)) {
-                nIrregular++;
                 auto &value = irregular[F(2, f)];
                 value.first = f;
                 value.second[F(0, f)] = F(1, f);

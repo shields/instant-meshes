@@ -16,17 +16,18 @@
 #include "serializer.h"
 #include <thread>
 #include <cstdlib>
+#include <charconv>
+#include <string_view>
 
 /* Force usage of discrete GPU on laptops */
 NANOGUI_FORCE_DISCRETE_GPU();
-
-int nprocs = -1;
 
 int main(int argc, char **argv) {
     std::vector<std::string> args;
     bool extrinsic = true, dominant = false, align_to_boundaries = false;
     bool fullscreen = false, help = false, deterministic = false, compat = false;
     int rosy = 4, posy = 4, face_count = -1, vertex_count = -1;
+    int nprocs = -1;
     uint32_t knn_points = 10, smooth_iter = 2;
     Float crease_angle = -1, scale = -1;
     std::string batchOutput;
@@ -51,7 +52,12 @@ int main(int argc, char **argv) {
                     cerr << "Missing thread count!" << endl;
                     return -1;
                 }
-                nprocs = str_to_uint32_t(argv[i]);
+                std::string_view value(argv[i]);
+                auto result = std::from_chars(value.data(), value.data() + value.size(), nprocs);
+                if (result.ec != std::errc() || result.ptr != value.data() + value.size() || nprocs <= 0) {
+                    cerr << "Error: Thread count must be positive and fit in an integer!" << endl;
+                    return EXIT_FAILURE;
+                }
             } else if (strcmp("--smooth", argv[i]) == 0 || strcmp("-S", argv[i]) == 0) {
                 if (++i >= argc) {
                     cerr << "Missing smoothing iteration count argument!" << endl;
@@ -170,7 +176,8 @@ int main(int argc, char **argv) {
     if (args.size() == 0)
         cout << "Running in GUI mode, start with -h for instructions on batch mode." << endl;
 
-    tbb::task_scheduler_init init(nprocs == -1 ? tbb::task_scheduler_init::automatic : nprocs);
+    tbb::global_control concurrency(tbb::global_control::max_allowed_parallelism,
+        nprocs == -1 ? tbb::info::default_concurrency() : nprocs);
 
     if (!batchOutput.empty() && args.size() == 1) {
         try {
@@ -186,6 +193,9 @@ int main(int argc, char **argv) {
     }
 
     try {
+        #if defined(__APPLE__)
+            glfwInitHint(GLFW_COCOA_CHDIR_RESOURCES, GLFW_FALSE);
+        #endif
         nanogui::init();
 
         #if defined(__APPLE__)

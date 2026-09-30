@@ -17,6 +17,7 @@
 
 /* BVH node in 32 bytes */
 struct BVHNode {
+    BVHNode() : inner{0, 0} { }
     union {
         struct {
             unsigned flag : 1;
@@ -55,7 +56,7 @@ struct BVHNode {
 class BVH {
     friend struct BVHBuildTask;
     /* Cost values for BVH surface area heuristic */
-    enum { T_aabb = 1, T_tri = 1 };
+    static constexpr Float T_aabb = 1, T_tri = 1;
 public:
     BVH(const MatrixXu *F, const MatrixXf *V, const MatrixXf *N, const AABB &aabb);
 

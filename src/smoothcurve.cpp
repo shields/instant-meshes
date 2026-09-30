@@ -176,13 +176,11 @@ inline bool astar(const MatrixXu &F, const VectorXu &E2E, const MatrixXf &V, uin
     g_score[start] = 0;
     pq.push(Entry(start, g_score[start] + eucldist(start, end)));
 
-    uint32_t iter = 0;
     while (true) {
         if (pq.empty()) {
             /* Internal error - graph disconnected? */
             return false;
         }
-        iter++;
         uint32_t current = pq.top().first;
         Float currentDist = pq.top().second;
         if (current == end)

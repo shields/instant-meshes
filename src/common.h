@@ -30,6 +30,11 @@
 #include <mutex>
 #include <thread>
 #include <algorithm>
+#include <cstring>
+#include <cassert>
+#include <functional>
+#include <limits>
+#include <sstream>
 
 #define PARALLELIZE
 #define SINGLE_PRECISION

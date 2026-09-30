@@ -1,5 +1,4 @@
 Makefile
-*.cmake
 .DS_Store
 ext_build
 build

@@ -1,6 +1,8 @@
 Copyright (c) 2015 Wenzel Jakob, Daniele Panozzo, Marco Tarini,
 and Olga Sorkine-Hornung. All rights reserved.
 
+Copyright © 2026 Michael Shields
+
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
 

@@ -1534,12 +1534,9 @@ void Optimizer::wait() {
     while (mRunning && (mOptimizePositions || mOptimizeOrientations))
         mCond.wait(mRes.mutex());
 }
-extern int nprocs;
-
 void Optimizer::run() {
     const int levelIterations = 6;
     uint32_t operations = 0;
-    tbb::task_scheduler_init init(nprocs);
 
     auto progress = [&](uint32_t ops) {
         operations += ops;
@@ -1690,4 +1687,3 @@ void Optimizer::run() {
             mTimer.reset();
     }
 }
-

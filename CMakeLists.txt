@@ -1,200 +1,167 @@
-cmake_minimum_required (VERSION 2.8.3)
-project(InstantMeshes)
+# Use of this source code is governed by a
+# BSD-style license that can be found in the LICENSE.txt file.
+
+cmake_minimum_required(VERSION 3.24...4.4)
+project(InstantMeshes LANGUAGES C CXX)
+
+if(APPLE)
+  enable_language(OBJC OBJCXX)
+  set(CMAKE_OBJCXX_STANDARD 23)
+  set(CMAKE_OBJCXX_STANDARD_REQUIRED ON)
+endif()
+
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(INSTANT_MESHES_DEV_MODE "Instant meshes developer mode" OFF)
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
-  message(STATUS "Setting build type to 'Release' as none was specified.")
   set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build." FORCE)
-  set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release"
-    "MinSizeRel" "RelWithDebInfo")
-endif()
-string(TOUPPER "${CMAKE_BUILD_TYPE}" U_CMAKE_BUILD_TYPE)
-
-if(NOT IS_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/ext/nanogui/ext/glfw")
-  message(FATAL_ERROR "The Instant Meshes dependency repositories (NanoGUI, GLFW, etc.) are missing! "
-    "You probably did not clone the project with --recursive. It is possible to recover "
-    "by calling \"git submodule update --init --recursive\"")
+  set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS Debug Release MinSizeRel RelWithDebInfo)
 endif()
 
-# Enable folders for projects in Visual Studio
-if (CMAKE_GENERATOR MATCHES "Visual Studio")
-  set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/ext/nanogui/src/screen.cpp"
+   OR NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/ext/dset/dset.h"
+   OR NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/ext/pcg32/pcg32.h")
+  message(FATAL_ERROR "Missing dependencies. Run git submodule update --init --recursive.")
 endif()
 
-# Sanitize build environment for static build with C++11
-if (MSVC)
-  add_definitions (/D "_CRT_SECURE_NO_WARNINGS")
-  add_definitions (/D "__TBB_NO_IMPLICIT_LINKAGE")
-
-  # Parallel build on MSVC (all targets)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
-
-  if (NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /arch:SSE2")
-
-    # Disable Eigen vectorization for Windows 32 bit builds (issues with unaligned access segfaults)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /DEIGEN_DONT_ALIGN")
-  endif()
-
-  # Static build
-  set(CompilerFlags
-        CMAKE_CXX_FLAGS CMAKE_CXX_FLAGS_DEBUG CMAKE_CXX_FLAGS_RELEASE
-        CMAKE_CXX_FLAGS_MINSIZEREL CMAKE_CXX_FLAGS_RELWITHDEBINFO
-        CMAKE_C_FLAGS CMAKE_C_FLAGS_DEBUG CMAKE_C_FLAGS_RELEASE
-        CMAKE_C_FLAGS_MINSIZEREL CMAKE_C_FLAGS_RELWITHDEBINFO)
-  foreach(CompilerFlag ${CompilerFlags})
-    string(REPLACE "/MD" "/MT" ${CompilerFlag} "${${CompilerFlag}}")
-  endforeach()
-elseif(APPLE)
-  # Try to auto-detect a suitable SDK
-  # Commented out for now -- causes a too new SDK to be selected on AppVeyor
-  #execute_process(COMMAND bash -c "xcodebuild -version -sdk | grep MacOSX | grep Path | head -n 1 | cut -f 2 -d ' '" OUTPUT_VARIABLE CMAKE_OSX_SYSROOT)
-  #string(REGEX REPLACE "(\r?\n)+$" "" CMAKE_OSX_SYSROOT "${CMAKE_OSX_SYSROOT}")
-  #string(REGEX REPLACE "^.*X([0-9.]*).sdk$" "\\1" CMAKE_OSX_DEPLOYMENT_TARGET "${CMAKE_OSX_SYSROOT}")
-endif()
-
-# Enable C++11 mode on GCC / Clang
-if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=gnu++11")
-elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
-endif()
-
-# Build NanoGUI
-set(NANOGUI_BUILD_EXAMPLE OFF CACHE BOOL " " FORCE)
-set(NANOGUI_BUILD_SHARED  OFF CACHE BOOL " " FORCE)
-set(NANOGUI_BUILD_PYTHON  OFF CACHE BOOL " " FORCE)
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/ext/nanogui ext_build/nanogui)
-set_property(TARGET nanogui glfw glfw_objects bin2c PROPERTY FOLDER "dependencies")
-
-# Build TBB
-set(TBB_BUILD_STATIC ON CACHE BOOL " " FORCE)
-set(TBB_BUILD_SHARED OFF CACHE BOOL " " FORCE)
-set(TBB_BUILD_TBBMALLOC OFF CACHE BOOL " " FORCE)
-set(TBB_BUILD_TBBMALLOC_PROXY OFF CACHE BOOL " " FORCE)
-set(TBB_BUILD_TESTS OFF CACHE BOOL " " FORCE)
-
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/ext/tbb ext_build/tbb)
-set_property(TARGET tbb_static tbb_def_files PROPERTY FOLDER "dependencies")
-
-# Compile instant meshes with various compiler warnings turned on
 if(MSVC)
-  if(CMAKE_CXX_FLAGS MATCHES "/W[0-4]")
-    string(REGEX REPLACE "/W[0-4]" "/W4" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
-  else()
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W4")
-  endif()
-elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wno-unused-parameter")
-  if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-gnu-anonymous-struct -Wno-c99-extensions -Wno-nested-anon-types")
-  endif()
+  set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
 
-# Header file directories of dependency libraries
-include_directories(
-  # NanoGUI
-  ${CMAKE_CURRENT_SOURCE_DIR}/ext/nanogui/include
-  # NanoGUI dependencies (Eigen, GLFW, NanoVG, GLAD?)
-  ${NANOGUI_EXTRA_INCS}
-  # Intel Thread Building Blocks
-  ${CMAKE_CURRENT_SOURCE_DIR}/ext/tbb/include
-  # Disjoint set data structure
-  ${CMAKE_CURRENT_SOURCE_DIR}/ext/dset
-  # Parallel stable sort
-  ${CMAKE_CURRENT_SOURCE_DIR}/ext/pss
-  # Pseudorandom number generator
-  ${CMAKE_CURRENT_SOURCE_DIR}/ext/pcg32
-  # RPLY mesh I/O library
-  ${CMAKE_CURRENT_SOURCE_DIR}/ext/rply
-  # Half precision type
-  ${CMAKE_CURRENT_SOURCE_DIR}/ext/half
-  # Resource file
-  ${CMAKE_CURRENT_BINARY_DIR}
-)
+include(FetchContent)
 
-# Run bin2c on resource files
+FetchContent_Declare(eigen
+  URL https://gitlab.com/libeigen/eigen/-/archive/5.0.1/eigen-5.0.1.tar.gz
+  URL_HASH SHA256=e9c326dc8c05cd1e044c71f30f1b2e34a6161a3b6ecf445d56b53ff1669e3dec
+  SOURCE_SUBDIR unused)
+FetchContent_MakeAvailable(eigen)
+add_library(instant_meshes_eigen INTERFACE)
+target_include_directories(instant_meshes_eigen SYSTEM INTERFACE "${eigen_SOURCE_DIR}")
+
+set(BUILD_SHARED_LIBS ON CACHE BOOL "" FORCE)
+set(TBB_TEST OFF CACHE BOOL "" FORCE)
+set(TBB_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(TBBMALLOC_BUILD OFF CACHE BOOL "" FORCE)
+set(TBB_STRICT ON CACHE BOOL "" FORCE)
+FetchContent_Declare(oneTBB
+  URL https://github.com/uxlfoundation/oneTBB/archive/refs/tags/v2023.1.0.tar.gz
+  URL_HASH SHA256=191288b52e1e6b17198000b64d77d194bb65e791be46ebc606e9b091781e2070)
+FetchContent_MakeAvailable(oneTBB)
+
+set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
+set(GLFW_LIBRARY_TYPE STATIC CACHE STRING "" FORCE)
+set(USE_MSVC_RUNTIME_LIBRARY_DLL OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(glfw
+  URL https://github.com/glfw/glfw/archive/refs/tags/3.5.1.tar.gz
+  URL_HASH SHA256=5234f4f29473e9a06bc7847d8371858dd135d38466eeeaa652fdc9f8f9ff0c20)
+FetchContent_MakeAvailable(glfw)
+
+find_package(OpenGL REQUIRED)
+find_package(Threads REQUIRED)
+include(cmake/NanoGUI.cmake)
+
 set(PNG_FILES
-  ${CMAKE_CURRENT_SOURCE_DIR}/resources/comb.png
-  ${CMAKE_CURRENT_SOURCE_DIR}/resources/delete_stroke.png
-  ${CMAKE_CURRENT_SOURCE_DIR}/resources/loadmesh.png
-  ${CMAKE_CURRENT_SOURCE_DIR}/resources/scare.png
-  ${CMAKE_CURRENT_SOURCE_DIR}/resources/sing_dir.png
-  ${CMAKE_CURRENT_SOURCE_DIR}/resources/sing_pos.png
-  ${CMAKE_CURRENT_SOURCE_DIR}/resources/instantmeshes.png)
-file(GLOB FRAG_FILES "${CMAKE_CURRENT_SOURCE_DIR}/resources/*.frag")
-file(GLOB VERT_FILES "${CMAKE_CURRENT_SOURCE_DIR}/resources/*.vert")
-file(GLOB GEO_FILES  "${CMAKE_CURRENT_SOURCE_DIR}/resources/*.geo")
-set(IM_RESOURCES ${PNG_FILES} ${FRAG_FILES} ${VERT_FILES} ${GEO_FILES})
-
+  resources/comb.png
+  resources/delete_stroke.png
+  resources/loadmesh.png
+  resources/scare.png
+  resources/sing_dir.png
+  resources/sing_pos.png
+  resources/instantmeshes.png)
+list(TRANSFORM PNG_FILES PREPEND "${CMAKE_CURRENT_SOURCE_DIR}/")
+file(GLOB SHADER_FILES CONFIGURE_DEPENDS
+  "${CMAKE_CURRENT_SOURCE_DIR}/resources/*.frag"
+  "${CMAKE_CURRENT_SOURCE_DIR}/resources/*.vert"
+  "${CMAKE_CURRENT_SOURCE_DIR}/resources/*.geo")
 add_custom_command(
-  OUTPUT resources.cpp
-  COMMAND bin2c ARGS resources.cpp resources.h ${IM_RESOURCES}
-  DEPENDS bin2c ${IM_RESOURCES}
-  COMMENT "Running bin2c"
-  PRE_BUILD VERBATIM)
+  OUTPUT resources.cpp resources.h
+  COMMAND bin2c resources.cpp resources.h ${PNG_FILES} ${SHADER_FILES}
+  DEPENDS bin2c ${PNG_FILES} ${SHADER_FILES}
+  VERBATIM)
 
-if (INSTANT_MESHES_DEV_MODE)
-  add_definitions(-DDEV_MODE)
-endif()
+add_library(instant_meshes_core STATIC
+  src/meshio.cpp
+  src/normal.cpp
+  src/adjacency.cpp
+  src/meshstats.cpp
+  src/hierarchy.cpp
+  src/extract.cpp
+  src/field.cpp
+  src/bvh.cpp
+  src/subdivide.cpp
+  src/reorder.cpp
+  src/serializer.cpp
+  src/batch.cpp
+  src/smoothcurve.cpp
+  src/cleanup.cpp
+  src/dedge.cpp
+  ext/rply/rply.c)
+target_include_directories(instant_meshes_core PUBLIC src)
+target_include_directories(instant_meshes_core SYSTEM PUBLIC ext/dset ext/pcg32 ext/rply ext/half)
+target_link_libraries(instant_meshes_core PUBLIC TBB::tbb instant_meshes_eigen Threads::Threads)
 
-# Resource file (icons etc.)
 set(EXTRA_SOURCE "")
-if (APPLE)
-  set(EXTRA_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/resources/im.icns")
+if(APPLE)
+  set(EXTRA_SOURCE resources/im.icns)
 elseif(WIN32)
-  set(EXTRA_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/resources/im.rc")
+  set(EXTRA_SOURCE resources/im.rc)
 endif()
 
 add_executable(InstantMeshes MACOSX_BUNDLE
   resources.cpp
-  src/glutil.h src/glutil.cpp
-  src/widgets.h src/widgets.cpp
-  src/aabb.h
-  src/main.cpp src/common.h
-  src/meshio.h src/meshio.cpp
-  src/normal.h src/normal.cpp
-  src/adjacency.h src/adjacency.cpp
-  src/meshstats.h src/meshstats.cpp
-  src/hierarchy.h src/hierarchy.cpp
-  src/extract.h src/extract.cpp
-  src/viewer.h src/viewer.cpp
-  src/field.h src/field.cpp
-  src/bvh.h src/bvh.cpp
-  src/subdivide.h src/subdivide.cpp
-  src/reorder.h src/reorder.cpp
-  src/serializer.h src/serializer.cpp
-  src/batch.h src/batch.cpp
-  src/smoothcurve.h src/smoothcurve.cpp
-  src/cleanup.h src/cleanup.cpp
-  src/dedge.h src/dedge.cpp
-  ext/rply/rply.c
+  src/main.cpp
+  src/glutil.cpp
+  src/widgets.cpp
+  src/viewer.cpp
   ${EXTRA_SOURCE})
-
-add_definitions(${NANOGUI_EXTRA_DEFS})
-target_link_libraries(InstantMeshes tbb_static nanogui ${NANOGUI_EXTRA_LIBS})
-
+target_include_directories(InstantMeshes PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
+target_link_libraries(InstantMeshes PRIVATE instant_meshes_core nanogui)
+target_compile_definitions(InstantMeshes PRIVATE $<$<BOOL:${INSTANT_MESHES_DEV_MODE}>:DEV_MODE>)
 set_target_properties(InstantMeshes PROPERTIES OUTPUT_NAME "Instant Meshes")
 
-if (WIN32)
-  # Quench some warnings on MSVC
-  if (MSVC)
-    set_source_files_properties(ext/rply/rply.c PROPERTIES COMPILE_FLAGS "/wd4127")
+foreach(target instant_meshes_core InstantMeshes)
+  if(MSVC)
+    target_compile_options(${target} PRIVATE /W4 /MP)
+    target_compile_definitions(${target} PRIVATE _CRT_SECURE_NO_WARNINGS)
+  else()
+    target_compile_options(${target} PRIVATE -Wall -Wextra -Wno-unused-parameter)
   endif()
-elseif (APPLE)
-  # Build an application bundle on OSX
-  set_target_properties(InstantMeshes PROPERTIES MACOSX_BUNDLE_BUNDLE_NAME "Instant Meshes")
-  set_target_properties(InstantMeshes PROPERTIES MACOSX_BUNDLE_BUNDLE_GUI_IDENTIFIER "com.im.InstantMeshes")
-  set_target_properties(InstantMeshes PROPERTIES MACOSX_BUNDLE_ICON_FILE im.icns)
-  set_target_properties(InstantMeshes PROPERTIES MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/resources/MacOSXBundleInfo.plist.in)
-  set_source_files_properties(resources/im.icns PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
-else()
-  # Insulate from a few types of ABI changes by statically linking against libgcc and libstdc++
-  set_target_properties(InstantMeshes PROPERTIES LINK_FLAGS "-static-libgcc")
-  #set_target_properties(InstantMeshes PROPERTIES LINK_FLAGS "-static-libgcc -static-libstdc++")
+endforeach()
+
+if(APPLE)
+  set_target_properties(InstantMeshes PROPERTIES
+    MACOSX_BUNDLE_BUNDLE_NAME "Instant Meshes"
+    MACOSX_BUNDLE_GUI_IDENTIFIER com.im.InstantMeshes
+    MACOSX_BUNDLE_ICON_FILE im.icns
+    MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/resources/MacOSXBundleInfo.plist.in"
+    BUILD_WITH_INSTALL_RPATH ON
+    INSTALL_RPATH "@executable_path/../Frameworks")
+  set_source_files_properties(resources/im.icns PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
+  add_custom_command(TARGET InstantMeshes POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_BUNDLE_DIR:InstantMeshes>/Contents/Frameworks"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_SONAME_FILE:tbb>"
+      "$<TARGET_BUNDLE_DIR:InstantMeshes>/Contents/Frameworks/"
+    VERBATIM)
+elseif(WIN32)
+  add_custom_command(TARGET InstantMeshes POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:tbb>" "$<TARGET_FILE_DIR:InstantMeshes>"
+    VERBATIM)
 endif()
 
-if (UNIX AND NOT ${U_CMAKE_BUILD_TYPE} MATCHES DEBUG)
-  add_custom_command(TARGET InstantMeshes POST_BUILD COMMAND strip $<TARGET_FILE:InstantMeshes>)
+include(CTest)
+if(BUILD_TESTING)
+  add_executable(instant_meshes_tests tests/core.cpp)
+  target_link_libraries(instant_meshes_tests PRIVATE instant_meshes_core)
+  add_test(NAME core COMMAND instant_meshes_tests)
+  add_test(NAME batch COMMAND ${CMAKE_COMMAND}
+    "-DEXECUTABLE=$<TARGET_FILE:InstantMeshes>"
+    "-DTEST_DIR=${CMAKE_CURRENT_BINARY_DIR}/batch-test"
+    -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/batch.cmake")
+  set_tests_properties(core batch PROPERTIES TIMEOUT 120)
 endif()

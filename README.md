@@ -42,21 +42,44 @@ Note: On Linux, Instant Meshes relies on the program ``zenity``, which must be i
 
 ## Compiling
 
-Compiling from scratch requires CMake and a recent version of XCode on Mac,
-Visual Studio 2015 on Windows, and GCC on Linux. 
+Building requires CMake 3.24 or newer, Ninja, and a C++23 compiler: Xcode on
+macOS, Visual Studio 2022 or newer on Windows, or current GCC/Clang on Linux.
+Apple Silicon builds run natively.
 
-On MacOS, compiling should be as simple as
+On macOS, install the build tools with `brew install cmake ninja`. On Debian,
+install `cmake ninja-build g++ libgl1-mesa-dev libxrandr-dev libxinerama-dev
+libxcursor-dev libxi-dev libwayland-dev libxkbcommon-dev wayland-protocols`.
 
-    git clone --recursive https://github.com/wjakob/instant-meshes
-    cd instant-meshes
-    cmake .
-    make -j 4
+```sh
+git clone --recursive https://github.com/wjakob/instant-meshes
+cd instant-meshes
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build --parallel
+ctest --test-dir build --output-on-failure
+```
 
-To build on Linux, please install the prerequisites ``libxrandr-dev``,
-``libxinerama-dev``, ``libxcursor-dev``, and ``libxi-dev`` and then use the
-same sequence of commands shown above for MacOS.
+For an existing checkout, initialize dependencies with
+`git submodule update --init --recursive` before configuring.
+CMake downloads pinned, checksum-verified Eigen 5.0.1, GLFW 3.5.1, and
+oneTBB 2023.1.0 releases during the first configuration, which requires Internet
+access. NanoGUI uses the sources in the submodule with the current dependencies.
+The bundled legacy Eigen, GLFW, TBB, and parallel stable sort are not built.
 
-On Windows, open the generated file ``InstantMeshes.sln`` after step 3 and proceed building as usual from within Visual Studio.
+On macOS, launch `open "build/Instant Meshes.app"`; the app includes its oneTBB
+library and can be moved as a bundle. On Linux, run `"build/Instant Meshes"`.
+On Windows, run the commands in a Visual Studio developer terminal, then launch
+`build/Instant Meshes.exe` with the generated TBB DLL alongside it. Visual Studio
+generators also work; pass `--config Release` to the build and `-C Release` to
+CTest.
+
+The same executable supports batch conversion without opening a window:
+
+```sh
+"build/Instant Meshes.app/Contents/MacOS/Instant Meshes" -d -f 1000 -o output.obj input.obj
+```
+
+Use `"build/Instant Meshes"` on Linux or `"build/Instant Meshes.exe"` on Windows.
+Point clouds use an `.aln` file referencing PLY scans with vertex normals.
 
 ## Usage
 
