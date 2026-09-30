@@ -1,0 +1,73 @@
+# Copyright © 2026 Michael Shields
+#
+# Use of this source code is governed by a BSD-style license that can be found
+# in the LICENSE.txt file.
+
+file(MAKE_DIRECTORY "${TEST_DIR}")
+execute_process(COMMAND "${CMAKE_COMMAND}" -E env "LLVM_PROFILE_FILE=${TEST_DIR}/stl.profraw"
+  "${TEST_EXECUTABLE}" "${TEST_DIR}/fixtures" COMMAND_ERROR_IS_FATAL ANY)
+execute_process(COMMAND "${LLVM_PROFDATA}" merge -sparse "${TEST_DIR}/stl.profraw"
+  -o "${TEST_DIR}/stl.profdata" COMMAND_ERROR_IS_FATAL ANY)
+execute_process(COMMAND "${LLVM_COV}" export "${TEST_EXECUTABLE}"
+  "-instr-profile=${TEST_DIR}/stl.profdata" --sources
+  "${SOURCE_DIR}/src/stl.cpp" "${SOURCE_DIR}/src/meshio.cpp"
+  OUTPUT_FILE "${TEST_DIR}/coverage.json" COMMAND_ERROR_IS_FATAL ANY)
+execute_process(COMMAND "${LLVM_COV}" show "${TEST_EXECUTABLE}"
+  "-instr-profile=${TEST_DIR}/stl.profdata" -format=html
+  "-output-dir=${TEST_DIR}/html" --sources "${SOURCE_DIR}/src/stl.cpp"
+  COMMAND_ERROR_IS_FATAL ANY)
+file(READ "${TEST_DIR}/coverage.json" coverage)
+string(JSON file_count LENGTH "${coverage}" data 0 files)
+math(EXPR last_file "${file_count} - 1")
+set(importer_found FALSE)
+foreach(index RANGE ${last_file})
+  string(JSON filename GET "${coverage}" data 0 files ${index} filename)
+  if(filename STREQUAL "${SOURCE_DIR}/src/stl.cpp")
+    set(importer_found TRUE)
+    foreach(metric lines branches regions functions)
+      string(JSON count GET "${coverage}" data 0 files ${index} summary ${metric} count)
+      string(JSON covered GET "${coverage}" data 0 files ${index} summary ${metric} covered)
+      if(NOT count EQUAL covered)
+        message(FATAL_ERROR "STL ${metric} coverage: ${covered}/${count}; see ${TEST_DIR}/html/index.html")
+      endif()
+      message(STATUS "STL ${metric} coverage: ${covered}/${count} (100%)")
+    endforeach()
+  endif()
+endforeach()
+if(NOT importer_found)
+  message(FATAL_ERROR "STL importer coverage is missing")
+endif()
+string(JSON function_count LENGTH "${coverage}" data 0 functions)
+math(EXPR last_function "${function_count} - 1")
+set(helper_count 0)
+foreach(index RANGE ${last_function})
+  string(JSON name GET "${coverage}" data 0 functions ${index} name)
+  if(name MATCHES "mesh_input_file_types|mesh_input_filename|load_mesh_or_pointcloud")
+    math(EXPR helper_count "${helper_count} + 1")
+    string(JSON branch_count LENGTH "${coverage}" data 0 functions ${index} branches)
+    math(EXPR last_branch "${branch_count} - 1")
+    if(branch_count GREATER 0)
+      foreach(branch RANGE ${last_branch})
+        foreach(outcome 4 5)
+          string(JSON hits GET "${coverage}" data 0 functions ${index} branches ${branch} ${outcome})
+          if(hits EQUAL 0)
+            message(FATAL_ERROR "Uncovered branch in ${name}; see ${TEST_DIR}/coverage.json")
+          endif()
+        endforeach()
+      endforeach()
+    endif()
+    string(JSON region_count LENGTH "${coverage}" data 0 functions ${index} regions)
+    math(EXPR last_region "${region_count} - 1")
+    foreach(region RANGE ${last_region})
+      string(JSON kind GET "${coverage}" data 0 functions ${index} regions ${region} 7)
+      string(JSON hits GET "${coverage}" data 0 functions ${index} regions ${region} 4)
+      if(kind EQUAL 0 AND hits EQUAL 0)
+        message(FATAL_ERROR "Uncovered code in ${name}; see ${TEST_DIR}/coverage.json")
+      endif()
+    endforeach()
+  endif()
+endforeach()
+if(NOT helper_count EQUAL 3)
+  message(FATAL_ERROR "Input dispatch or GUI helper coverage is missing")
+endif()
+message(STATUS "Input dispatch and GUI helpers: 100% region and branch coverage")

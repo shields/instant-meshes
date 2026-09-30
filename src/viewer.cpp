@@ -3034,20 +3034,13 @@ bool Viewer::mouseButtonEvent(const Vector2i &p, int button, bool down, int modi
 
 void Viewer::loadInput(std::string filename, Float creaseAngle, Float scale,
                       int face_count, int vertex_count, int rosy, int posy, int knn_points) {
-    std::string extension;
-    if (filename.size() > 4)
-        extension = str_tolower(filename.substr(filename.size()-4));
-
     if (filename.empty()) {
-        filename = nanogui::file_dialog({
-            {"obj", "Wavefront OBJ"},
-            {"ply", "Stanford PLY"},
-            {"aln", "Aligned point cloud"}
-        }, false);
+        filename = nanogui::file_dialog(mesh_input_file_types(), false);
         if (filename == "")
             return;
-    } else if (extension != ".ply" && extension != ".obj" && extension != ".aln")
-        filename = filename + ".ply";
+    } else {
+        filename = mesh_input_filename(filename);
+    }
 
     if (!std::isfinite(creaseAngle)) {
         if (filename.find("fandisk") != std::string::npos || filename.find("cube_twist") != std::string::npos)

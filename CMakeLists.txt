@@ -15,6 +15,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(INSTANT_MESHES_DEV_MODE "Instant meshes developer mode" OFF)
+option(INSTANT_MESHES_STL_COVERAGE "Measure STL importer coverage with Clang" OFF)
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build." FORCE)
@@ -87,6 +88,7 @@ add_custom_command(
 
 add_library(instant_meshes_core STATIC
   src/meshio.cpp
+  src/stl.cpp
   src/normal.cpp
   src/adjacency.cpp
   src/meshstats.cpp
@@ -159,9 +161,46 @@ if(BUILD_TESTING)
   add_executable(instant_meshes_tests tests/core.cpp)
   target_link_libraries(instant_meshes_tests PRIVATE instant_meshes_core)
   add_test(NAME core COMMAND instant_meshes_tests)
+  add_executable(instant_meshes_stl_tests tests/stl.cpp)
+  target_link_libraries(instant_meshes_stl_tests PRIVATE instant_meshes_core)
+  if(MSVC)
+    target_compile_options(instant_meshes_stl_tests PRIVATE /W4)
+  else()
+    target_compile_options(instant_meshes_stl_tests PRIVATE -Wall -Wextra)
+  endif()
+  add_test(NAME stl COMMAND instant_meshes_stl_tests "${CMAKE_CURRENT_BINARY_DIR}/stl-test")
+  set_tests_properties(stl PROPERTIES FIXTURES_SETUP stl_inputs TIMEOUT 120)
   add_test(NAME batch COMMAND ${CMAKE_COMMAND}
     "-DEXECUTABLE=$<TARGET_FILE:InstantMeshes>"
     "-DTEST_DIR=${CMAKE_CURRENT_BINARY_DIR}/batch-test"
+    "-DSTL_DIR=${CMAKE_CURRENT_BINARY_DIR}/stl-test"
     -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/batch.cmake")
   set_tests_properties(core batch PROPERTIES TIMEOUT 120)
+  set_tests_properties(batch PROPERTIES FIXTURES_REQUIRED stl_inputs)
+
+  if(INSTANT_MESHES_STL_COVERAGE)
+    if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+      message(FATAL_ERROR "STL coverage requires Clang.")
+    endif()
+    if(APPLE)
+      execute_process(COMMAND xcrun --find llvm-cov OUTPUT_VARIABLE LLVM_COV
+        OUTPUT_STRIP_TRAILING_WHITESPACE COMMAND_ERROR_IS_FATAL ANY)
+      execute_process(COMMAND xcrun --find llvm-profdata OUTPUT_VARIABLE LLVM_PROFDATA
+        OUTPUT_STRIP_TRAILING_WHITESPACE COMMAND_ERROR_IS_FATAL ANY)
+    else()
+      find_program(LLVM_COV llvm-cov REQUIRED)
+      find_program(LLVM_PROFDATA llvm-profdata REQUIRED)
+    endif()
+    set_source_files_properties(src/stl.cpp src/meshio.cpp PROPERTIES
+      COMPILE_OPTIONS "-fprofile-instr-generate;-fcoverage-mapping")
+    target_link_options(instant_meshes_core INTERFACE -fprofile-instr-generate)
+    add_custom_target(stl-coverage
+      COMMAND ${CMAKE_COMMAND}
+        "-DTEST_EXECUTABLE=$<TARGET_FILE:instant_meshes_stl_tests>"
+        "-DTEST_DIR=${CMAKE_CURRENT_BINARY_DIR}/stl-coverage"
+        "-DLLVM_COV=${LLVM_COV}" "-DLLVM_PROFDATA=${LLVM_PROFDATA}"
+        "-DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/stl_coverage.cmake"
+      DEPENDS instant_meshes_stl_tests VERBATIM)
+  endif()
 endif()

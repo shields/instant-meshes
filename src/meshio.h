@@ -23,6 +23,15 @@ load_mesh_or_pointcloud(const std::string &filename, MatrixXu &F,
 extern void load_obj(const std::string &filename, MatrixXu &F, MatrixXf &V,
                      const ProgressCallback &progress = ProgressCallback());
 
+extern void load_stl(const std::string &filename, MatrixXu &F, MatrixXf &V,
+                     const ProgressCallback &progress = ProgressCallback());
+
+extern void read_stl(std::istream &input, MatrixXu &F, MatrixXf &V,
+                     const ProgressCallback &progress = ProgressCallback());
+
+extern const std::vector<std::pair<std::string, std::string>> &mesh_input_file_types();
+extern std::string mesh_input_filename(const std::string &filename);
+
 extern void load_ply(const std::string &filename, MatrixXu &F, MatrixXf &V,
                      MatrixXf &N, bool pointcloud = false,
                      const ProgressCallback &progress = ProgressCallback());

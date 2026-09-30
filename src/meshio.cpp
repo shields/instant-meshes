@@ -23,6 +23,27 @@ extern "C" {
     #include "rply.h"
 }
 
+const std::vector<std::pair<std::string, std::string>> &mesh_input_file_types() {
+    static const std::vector<std::pair<std::string, std::string>> types {
+        {"obj", "Wavefront OBJ"},
+        {"ply", "Stanford PLY"},
+        {"aln", "Aligned point cloud"},
+        {"stl", "Stereolithography STL"}
+    };
+    return types;
+}
+
+std::string mesh_input_filename(const std::string &filename) {
+    std::string extension;
+    if (filename.size() > 4)
+        extension = str_tolower(filename.substr(filename.size() - 4));
+    for (const auto &[type, description] : mesh_input_file_types()) {
+        if (extension == "." + type)
+            return filename;
+    }
+    return filename + ".ply";
+}
+
 void load_mesh_or_pointcloud(const std::string &filename, MatrixXu &F, MatrixXf &V, MatrixXf &N,
               const ProgressCallback &progress) {
     std::string extension;
@@ -33,10 +54,12 @@ void load_mesh_or_pointcloud(const std::string &filename, MatrixXu &F, MatrixXf 
         load_ply(filename, F, V, N, false, progress);
     else if (extension == ".obj")
         load_obj(filename, F, V, progress);
+    else if (extension == ".stl")
+        load_stl(filename, F, V, progress);
     else if (extension == ".aln")
         load_pointcloud(filename, V, N, progress);
     else
-        throw std::runtime_error("load_mesh_or_pointcloud: Unknown file extension \"" + extension + "\" (.ply/.obj/.aln are supported)");
+        throw std::runtime_error("load_mesh_or_pointcloud: Unknown file extension \"" + extension + "\" (.ply/.obj/.stl/.aln are supported)");
 }
 
 void write_mesh(const std::string &filename, const MatrixXu &F,

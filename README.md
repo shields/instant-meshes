@@ -79,7 +79,22 @@ The same executable supports batch conversion without opening a window:
 ```
 
 Use `"build/Instant Meshes"` on Linux or `"build/Instant Meshes.exe"` on Windows.
+Mesh input supports OBJ, triangle PLY, and ASCII or binary STL. STL import joins
+vertices with identical coordinates, preserves facet winding, and recomputes
+normals during preprocessing. Malformed files and degenerate facets are rejected.
 Point clouds use an `.aln` file referencing PLY scans with vertex normals.
+
+To check STL importer coverage with Clang and LLVM tools:
+
+```sh
+cmake -S . -B build/coverage -G Ninja -DCMAKE_BUILD_TYPE=Debug -DINSTANT_MESHES_STL_COVERAGE=ON
+cmake --build build/coverage --target stl-coverage
+```
+
+The target requires 100% line,
+region, function, and branch coverage for the importer, and full region and
+branch coverage for input dispatch and the GUI filename/type helpers. It writes
+an HTML report to `build/coverage/stl-coverage/html/index.html`.
 
 ## Usage
 

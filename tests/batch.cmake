@@ -25,6 +25,25 @@ if(NOT result EQUAL 0)
   message(FATAL_ERROR "Deterministic output changes with thread count")
 endif()
 
+foreach(stl octahedron-ascii.stl octahedron-binary.STL)
+  set(output "${TEST_DIR}/${stl}.obj")
+  execute_process(COMMAND "${EXECUTABLE}" -d -t 4 -f 128 -o "${output}" "${STL_DIR}/${stl}"
+    RESULT_VARIABLE result OUTPUT_VARIABLE log ERROR_VARIABLE errors TIMEOUT 60)
+  if(NOT result EQUAL 0)
+    message(FATAL_ERROR "STL remeshing failed: ${result}\n${log}\n${errors}")
+  endif()
+  execute_process(COMMAND "${CMAKE_COMMAND}" -E compare_files
+    "${TEST_DIR}/quads-4.obj" "${output}" RESULT_VARIABLE result)
+  if(NOT result EQUAL 0)
+    message(FATAL_ERROR "STL and OBJ produce different deterministic meshes: ${stl}")
+  endif()
+endforeach()
+execute_process(COMMAND "${EXECUTABLE}" -d -f 128 -o "${TEST_DIR}/invalid-stl.obj" "${STL_DIR}/invalid.stl"
+  RESULT_VARIABLE result OUTPUT_VARIABLE log ERROR_VARIABLE errors TIMEOUT 10)
+if(result EQUAL 0 OR NOT errors MATCHES "invalid number")
+  message(FATAL_ERROR "Malformed STL is not rejected in batch mode: ${result}\n${log}\n${errors}")
+endif()
+
 execute_process(COMMAND "${EXECUTABLE}" -t 4 -r 6 -p 6 -f 128 -o "${TEST_DIR}/triangles.ply" "${input}"
   RESULT_VARIABLE result OUTPUT_VARIABLE log ERROR_VARIABLE errors TIMEOUT 60)
 if(NOT result EQUAL 0)
